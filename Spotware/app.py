@@ -11,6 +11,7 @@ if str(_ROOT) not in sys.path:
 
 from perception import followup_answer, perceive  # noqa: E402
 from sustainability import get_sustainability_record  # noqa: E402
+from decision import recommend_action  # noqa: E402
 
 # ── MUST be first Streamlit call ──────────────────────────────────────────────
 st.set_page_config(
@@ -106,6 +107,8 @@ if "last_perception" not in st.session_state:
     st.session_state.last_perception = None
 if "last_sustainability" not in st.session_state:
     st.session_state.last_sustainability = None
+if "last_decision" not in st.session_state:
+    st.session_state.last_decision = None
 if "last_error" not in st.session_state:
     st.session_state.last_error = None
 if "followup_messages" not in st.session_state:
@@ -117,14 +120,18 @@ if image_bytes:
         st.session_state.last_error = None
         st.session_state.last_perception = None
         st.session_state.last_sustainability = None
+        st.session_state.last_decision = None
         st.session_state.followup_messages = []
         with st.spinner("Calling Gemini vision…"):
             try:
                 perception = perceive(image_bytes)
-                st.session_state.last_perception = perception
-                st.session_state.last_sustainability = get_sustainability_record(
+                sustainability = get_sustainability_record(
                     perception.get("device_class")
                 )
+                decision = recommend_action(perception, sustainability)
+                st.session_state.last_perception = perception
+                st.session_state.last_sustainability = sustainability
+                st.session_state.last_decision = decision
             except Exception as e:
                 st.session_state.last_error = str(e)
 
@@ -133,7 +140,8 @@ if image_bytes:
 
     per = st.session_state.last_perception
     sus = st.session_state.last_sustainability
-    if per is not None and sus is not None:
+    dec = st.session_state.last_decision
+    if per is not None and sus is not None and dec is not None:
         st.subheader("Identification")
         c1, c2, c3 = st.columns(3)
         c1.metric("Device class", per.get("device_class", "—"))
@@ -147,34 +155,69 @@ if image_bytes:
         if per.get("notes"):
             st.info(per["notes"])
 
-        st.subheader("Sustainability snapshot")
-        st.metric("Matched type", sus.get("component_type", "—"))
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Embodied CO₂ (kg)", sus.get("embodied_co2_kg", "—"))
-        m2.metric("Scrap value (USD)", sus.get("scrap_value_usd", "—"))
-        gen = per.get("generation_hint", "unknown")
-        refurb_key = (
-            "refurb_value_modern_usd"
-            if gen == "modern"
-            else "refurb_value_legacy_usd"
-            if gen == "legacy"
-            else "refurb_value_modern_usd"
+        # ── Recommended action (the headline) ─────────────────────────────────
+        st.subheader("Recommended action")
+        _ACTION_COLORS = {
+            "green": ("#EAF3DE", "#173404", "#3B6D11", "#639922"),
+            "blue":  ("#E6F1FB", "#042C53", "#185FA5", "#378ADD"),
+            "amber": ("#FAEEDA", "#412402", "#854F0B", "#BA7517"),
+            "red":   ("#FCEBEB", "#501313", "#A32D2D", "#E24B4A"),
+        }
+        bg, fg, sub, border = _ACTION_COLORS.get(
+            dec.get("color", "amber"), _ACTION_COLORS["amber"]
         )
-        m3.metric("Refurb estimate (USD)", sus.get(refurb_key, "—"))
-        metals = sus.get("recoverable_metals_g")
+        st.markdown(
+            f"""
+            <div style='background:{bg};border-left:4px solid {border};
+                        padding:14px 18px;border-radius:8px;margin:8px 0 16px 0'>
+              <div style='font-size:11px;color:{sub};text-transform:uppercase;
+                          letter-spacing:0.5px;font-weight:500'>
+                Action
+              </div>
+              <div style='font-size:20px;font-weight:600;color:{fg};margin-top:2px'>
+                {dec.get("label", "—")}
+              </div>
+              <div style='font-size:14px;color:{sub};margin-top:6px;line-height:1.5'>
+                {dec.get("reason", "")}
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ── Sustainability impact ─────────────────────────────────────────────
+        st.subheader("Sustainability impact")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("CO₂ avoided", f"{dec.get('co2_avoided_kg', 0)} kg")
+        m2.metric("Recovery value", f"${dec.get('value_usd', 0)}")
+        m3.metric("Recoverable metals", f"{dec.get('metals_total_g', 0):.0f} g")
+        if dec.get("source"):
+            st.caption(f"📚 Source: {dec['source']}")
+
+        metals = dec.get("metals_breakdown_g") or sus.get("recoverable_metals_g")
         if isinstance(metals, dict) and metals:
-            st.write("**Recoverable metals (g)**")
-            st.json(metals)
+            with st.expander("Metal breakdown"):
+                st.json(metals)
+
         flags = sus.get("hazard_flags")
         if isinstance(flags, list) and flags:
             st.warning("Hazard flags: " + ", ".join(str(x) for x in flags))
-        if sus.get("default_action"):
-            st.success(f"Suggested action: **{sus['default_action']}**")
+
+        # ── Why this recommendation? (rule trace) ─────────────────────────────
+        with st.expander("Why this recommendation?"):
+            st.markdown("**Decision logic trace**")
+            for step in dec.get("rule_trace", []):
+                st.markdown(f"- {step}")
+            st.markdown(
+                f"\n**Final action:** `{dec.get('action', '—')}`"
+            )
 
         with st.expander("Raw perception JSON"):
             st.code(json.dumps(per, indent=2), language="json")
         with st.expander("Raw sustainability record"):
             st.code(json.dumps(sus, indent=2), language="json")
+        with st.expander("Raw decision output"):
+            st.code(json.dumps(dec, indent=2), language="json")
 
         st.subheader("Follow-up questions")
         st.caption(
