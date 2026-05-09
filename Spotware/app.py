@@ -15,7 +15,7 @@ from sustainability import get_sustainability_record  # noqa: E402
 # ── MUST be first Streamlit call ──────────────────────────────────────────────
 st.set_page_config(
     page_title="Spotware",
-    page_icon="🔍",
+    page_icon="logo1.png",
     layout="centered",
 )
 
@@ -27,13 +27,15 @@ st.markdown(
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700;800;900&display=swap');
 
-        html, body, p, div, span, label, button, input {
+        html, body, [data-testid="stAppViewContainer"] p,
+        [data-testid="stAppViewContainer"] label,
+        [data-testid="stMarkdown"] {
             font-family: 'Inter', sans-serif !important;
         }
 
         .hero-title {
             font-family: 'DM Sans', sans-serif;
-            font-size: clamp(5rem, 10vw, 9rem);
+            font-size: clamp(7rem, 20vw, 30rem);
             font-weight: 900;
             text-align: center;
             letter-spacing: -0.03em;
@@ -43,20 +45,26 @@ st.markdown(
             color: inherit;
         }
 
+        .hero-divider {
+            border: none;
+            border-top: 1px solid rgba(128,128,128,0.2);
+            margin: 0 auto 3rem auto;   /* ← increased bottom margin */
+            width: 80%;
+        }
+
+/* ── Extra breathing room before the upload widgets ── */
+        .block-container {
+            padding-top: 1rem !important;
+        }
+
         .hero-subtitle {
+            
             font-family: 'Inter', sans-serif;
             font-size: 1.2rem;
             font-weight: 400;
             text-align: center;
             opacity: 0.6;
-            margin-bottom: 2.5rem;
-        }
-
-        .hero-divider {
-            border: none;
-            border-top: 1px solid rgba(128,128,128,0.2);
-            margin: 0 auto 2rem auto;
-            width: 80%;
+            margin-bottom: 3rem;        /* ← increased from 2.5rem */
         }
     </style>
 """,
@@ -64,10 +72,10 @@ st.markdown(
 )
 
 _LOGO = Path(__file__).resolve().parent / "logo1.png"
-col1, col2, col3 = st.columns([2, 1, 2])
-with col2:
-    if _LOGO.is_file():
-        st.image(str(_LOGO), width=200)
+if _LOGO.is_file():
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image(str(_LOGO), use_container_width=True)
 
 st.markdown("<h1 class='hero-title'>Spotware</h1>", unsafe_allow_html=True)
 st.markdown(
