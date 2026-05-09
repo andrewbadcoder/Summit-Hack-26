@@ -9,7 +9,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from perception import perceive  # noqa: E402
+from perception import followup_answer, perceive  # noqa: E402
 from sustainability import get_sustainability_record  # noqa: E402
 
 # ── MUST be first Streamlit call ──────────────────────────────────────────────
@@ -100,6 +100,8 @@ if "last_sustainability" not in st.session_state:
     st.session_state.last_sustainability = None
 if "last_error" not in st.session_state:
     st.session_state.last_error = None
+if "followup_messages" not in st.session_state:
+    st.session_state.followup_messages = []
 
 if image_bytes:
     run = st.button("Run analysis", type="primary")
@@ -107,6 +109,7 @@ if image_bytes:
         st.session_state.last_error = None
         st.session_state.last_perception = None
         st.session_state.last_sustainability = None
+        st.session_state.followup_messages = []
         with st.spinner("Calling Gemini vision…"):
             try:
                 perception = perceive(image_bytes)
@@ -164,6 +167,44 @@ if image_bytes:
             st.code(json.dumps(per, indent=2), language="json")
         with st.expander("Raw sustainability record"):
             st.code(json.dumps(sus, indent=2), language="json")
+
+        st.subheader("Follow-up questions")
+        st.caption(
+            "Ask about risks, data destruction, recycling paths, or repair—the model uses "
+            "your analysis above as context."
+        )
+        for msg in st.session_state.followup_messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        if prompt := st.chat_input(
+            "e.g. Is it safe to store this in a closet? Where should I take it?"
+        ):
+            history: list[tuple[str, str]] = []
+            msgs = st.session_state.followup_messages
+            i = 0
+            while i + 1 < len(msgs):
+                if msgs[i]["role"] == "user" and msgs[i + 1]["role"] == "assistant":
+                    history.append((msgs[i]["content"], msgs[i + 1]["content"]))
+                i += 2
+            try:
+                with st.spinner("Asking Gemini…"):
+                    reply = followup_answer(
+                        user_message=prompt,
+                        perception=per,
+                        sustainability=sus,
+                        history=history,
+                    )
+            except Exception as e:
+                st.error(str(e))
+            else:
+                st.session_state.followup_messages.append(
+                    {"role": "user", "content": prompt}
+                )
+                st.session_state.followup_messages.append(
+                    {"role": "assistant", "content": reply}
+                )
+                st.rerun()
 
 st.caption(
     "Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` in `Summit-Hack-26/.env`. "
