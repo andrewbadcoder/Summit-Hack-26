@@ -35,7 +35,7 @@ REQUIRED_KEYS = frozenset(
     }
 )
 
-DEFAULT_MODEL = "gemini-3.0-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 _IMAGE_SUFFIX_TO_MIME = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -46,11 +46,13 @@ _IMAGE_SUFFIX_TO_MIME = {
 
 
 def load_gemini_api_key() -> str:
-    load_dotenv()
+    load_dotenv(Path(__file__).resolve().parent / ".env")
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key or key == "your_key_here":
+        key = os.environ.get("GOOGLE_API_KEY", "").strip()
+    if not key or key == "your_key_here":
         raise RuntimeError(
-            "Set GEMINI_API_KEY in .env (see .env.example). "
+            "Set GEMINI_API_KEY or GOOGLE_API_KEY in .env (see .env.example). "
             "Get a key at https://aistudio.google.com/apikey"
         )
     return key
