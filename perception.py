@@ -214,6 +214,77 @@ def perceive(image: ImageInput, *, model: str | None = None) -> dict[str, Any]:
     return _validate_and_coerce(parsed)
 
 
+_FOLLOWUP_SYSTEM_PREFIX = """You are an e-waste triage and sustainability advisor.
+Ground answers in the perception and sustainability JSON in your instructions.
+If the user asks for something not supported by that JSON, say so and give only general best-practice guidance—do not invent specific facilities, prices, laws, or certifications.
+Prioritize safety, data-bearing devices, and hazardous materials. Be concise unless the user asks for detail.
+
+--- ANALYSIS CONTEXT (JSON) ---
+"""
+
+
+def followup_answer(
+    *,
+    user_message: str,
+    perception: dict[str, Any],
+    sustainability: dict[str, Any],
+    history: list[tuple[str, str]],
+    model: str | None = None,
+) -> str:
+    """
+    Answer a follow-up question using the same Gemini model, with perception + sustainability
+    as fixed context. ``history`` is prior (user text, assistant text) pairs in order.
+    """
+    text = user_message.strip()
+    if not text:
+        raise ValueError("Follow-up message must not be empty.")
+
+    api_key = load_gemini_api_key()
+    resolved_model = (model or os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL).strip()
+    context_json = json.dumps(
+        {"perception": perception, "sustainability": sustainability},
+        indent=2,
+    )
+    sys_text = _FOLLOWUP_SYSTEM_PREFIX + context_json
+
+    contents: list[types.Content] = []
+    for user_txt, model_txt in history:
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=user_txt)],
+            )
+        )
+        contents.append(
+            types.Content(
+                role="model",
+                parts=[types.Part.from_text(text=model_txt)],
+            )
+        )
+    contents.append(
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=text)],
+        )
+    )
+
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model=resolved_model,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=sys_text)],
+            ),
+        ),
+    )
+    out = (response.text or "").strip()
+    if not out:
+        raise RuntimeError("Empty response from Gemini (follow-up).")
+    return out
+
+
 def _iter_images(folder: Path) -> list[Path]:
     exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
     files = sorted(
