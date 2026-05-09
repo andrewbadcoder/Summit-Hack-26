@@ -19,6 +19,7 @@ st.set_page_config(
     layout="centered",
 )
 
+
 # ── Fonts + Title Styling ────────────────────────────────────────────────────
 st.markdown(
     """
@@ -67,8 +68,6 @@ col1, col2, col3 = st.columns([2, 1, 2])
 with col2:
     if _LOGO.is_file():
         st.image(str(_LOGO), width=200)
-    else:
-        st.markdown("<div style='text-align:center;font-size:4rem'>🔍</div>", unsafe_allow_html=True)
 
 st.markdown("<h1 class='hero-title'>Spotware</h1>", unsafe_allow_html=True)
 st.markdown(
