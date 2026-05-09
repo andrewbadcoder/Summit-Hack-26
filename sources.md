@@ -124,3 +124,114 @@ https://pcserverandparts.com/
 5. **The "undetected" category**: deliberately conservative — assumes e-waste 
    pathway and never recommends landfill. Per-kg CO2 derived from the UN 
    E-Waste Monitor's $91B / 62 Mt aggregate ÷ avg item mass.
+
+## Price Range Derivation
+
+USD fields in `sustainability_data.json` (`scrap_value_usd`, 
+`refurb_value_modern_usd`, `refurb_value_legacy_usd`) are stored as 
+`[low, high]` arrays rather than point estimates. This is because the 
+underlying spread is the signal — a midpoint would hide it. The general 
+rules:
+
+- **`scrap_value_usd` high end** = theoretical max value computed directly 
+  from the component's `recoverable_metals_g` at late-2025 commodity prices 
+  (Cu ~$9.50/kg, Au ~$95/g, Ag ~$1/g; Al ~$2.50/kg, steel ~$0.40/kg, 
+  Pd ~$35/g, Pt ~$30/g, Nd ~$0.10/g as oxide-equivalent).
+- **`scrap_value_usd` low end** ≈ 30–40% of theoretical, reflecting the 
+  margin recyclers retain before paying out to an individual seller (per 
+  Methodology Note 3).
+- **Refurb modern/legacy ranges** bracket what a working unit actually 
+  trades for in current secondary markets, anchored to the source catalogs 
+  (Alta, PCSP, scrap aggregators) rather than to any single SKU.
+
+Per-component notes follow.
+
+### gpu — `[scrap 4–12]`, `[modern 2000–15000]`, `[legacy 50–400]`
+
+- Scrap: theoretical recoverable metal value is ~$11.40 (Au-dominated). 
+  Range floor = ~35% recycler payout.
+- Modern: bottom anchored at lower-tier modern accelerators (~$2k); top at 
+  H100-class cards quoted at $15k+ used per Methodology Note 2.
+- Legacy: bottom is the GTX 1060 reference (~$50, Methodology Note 2); top 
+  covers older Tesla/Quadro datacenter cards still moving through 
+  [alta_technologies_2025].
+
+### cpu — `[scrap 6–19]`, `[modern 500–4000]`, `[legacy 15–100]`
+
+- Scrap: gold-plated lid and pin grid push theoretical to ~$19. Floor at ~$6 
+  is consistent with what scrap CPU buyers post per pound for modern LGA 
+  parts.
+- Modern: range covers the spread from a single Xeon Silver / EPYC 9004-low 
+  ($500-ish) up to high-core EPYC / Xeon Platinum ($3-4k), per 
+  [pcsp_2026] system-level pricing decomposed to CPU share.
+- Legacy: Xeon E5 v3/v4 era pulls $15–100 depending on core count.
+
+### psu — `[scrap 2–6]`, `[modern 80–400]`, `[legacy 10–60]`
+
+- Scrap: theoretical ~$5.49, dominated by the copper transformer 
+  ([scrapcatalogue_psu_2025]).
+- Modern: redundant server PSUs (1100W–2400W Platinum/Titanium) sit at 
+  $80–400 across [alta_technologies_2025].
+- Legacy: older 750W/1100W units at $10–60.
+
+### ram — `[scrap 1–5]`, `[modern 80–600]`, `[legacy 5–30]`
+
+- Scrap: theoretical ~$4.88, almost entirely the gold edge connector.
+- Modern: per-stick range covers DDR5 ECC RDIMM 32GB (~$80) up to 128GB 
+  RDIMM (~$600) per [pcsp_2026].
+- Legacy: DDR3/DDR4 ECC sticks at $5–30.
+
+### motherboard — `[scrap 10–33]`, `[modern 300–1500]`, `[legacy 30–150]`
+
+- Scrap: theoretical ~$32.85 — the highest of any single component on a 
+  per-unit basis, driven by 0.25g Au + 0.1g Pd.
+- Modern: server mainboards alone (no CPU/RAM) at $300–1500 per 
+  [pcsp_2026].
+- Legacy: R720/R730-era boards at $30–150.
+
+### ssd — `[scrap 1–3]`, `[modern 400–2500]`, `[legacy 5–50]`
+
+- Scrap: theoretical ~$3.05; flash itself has no recovery value, so the 
+  range stays narrow.
+- Modern: enterprise NVMe in the 7.68TB–30.72TB tier referenced by 
+  [seagate_decarbonizing_data_2025] sells refurb at $400–2500.
+- Legacy: SATA SSDs (240GB–960GB consumer/enterprise) at $5–50.
+
+### hdd — `[scrap 3–10]`, `[modern 150–500]`, `[legacy 5–40]`
+
+- Scrap: theoretical metal value alone is only ~$3.34, but recyclers price 
+  whole drives higher because the neodymium magnet assembly is sold intact 
+  (not refined) and the aluminum casting is a clean stream — hence the 
+  $3–10 range rather than $1–3.
+- Modern: 18TB–30TB enterprise drives (incl. Mozaic-class from 
+  [seagate_decarbonizing_data_2025]) at $150–500 refurb.
+- Legacy: 1–8TB enterprise SAS/SATA at $5–40.
+
+### network_card — `[scrap 1–4]`, `[modern 200–2000]`, `[legacy 5–50]`
+
+- Scrap: theoretical ~$4.17, gold-dominated.
+- Modern: 100G/200G/400G Mellanox ConnectX-6/7 and Intel E810 NICs span 
+  $200–2000 across [alta_technologies_2025].
+- Legacy: 1G/10G NICs at $5–50.
+
+### server_chassis — `[scrap 8–26]`, `[modern 200–1500]`, `[legacy 50–200]`
+
+- Scrap: theoretical ~$26.25; steel is most of the mass but aluminum and 
+  copper carry most of the value.
+- Modern: directly anchored to [pcsp_2026] examples — DL380 Gen10 from 
+  $199.98, R640 from $214.99, R740XD from $629.99 — extending up to $1500 
+  for current-gen R760/DL380 Gen11.
+- Legacy: pre-Gen10 / R720-era chassis at $50–200.
+
+### power_network_cable — `[scrap 0.25–0.80]`, `[modern 3–25]`, `[legacy 0.50–2]`
+
+- Scrap: bounded by copper content (theoretical ~$0.76 per 
+  [scrapmonster_cable_2024]).
+- Modern: covers the spread from a generic C13 power cable (~$3) to a DAC 
+  or fiber breakout cable (~$25).
+- Legacy: bulk used patch/power cables at $0.50–2.
+
+### undetected
+
+USD fields remain `null` — `default_action` is `manual_review`, and a 
+numeric range would imply more confidence than is warranted.
