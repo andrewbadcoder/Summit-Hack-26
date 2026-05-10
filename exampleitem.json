@@ -1,0 +1,17 @@
+{
+  "GPU": {
+        "embodied_co2_kg": 320,
+        "embodied_co2_source": "nvidia_h100_pcf_2024",
+        "recoverable_metals_g": {"copper": 180, "gold": 0.3, "aluminum": 220},
+        "materials_source": "pcb_recovery_avg_2024",
+        "scrap_value_usd": 45,
+        "refurb_value_modern_usd": 800,
+        "refurb_value_legacy_usd": 80,
+         "refurb_source": "alta_technologies_2025",
+          "hazard_flags": [
+                 "do_not_landfill",
+                "thermal_compound"
+             ],
+        "default_action": "refurbish_resell"
+    }
+}
