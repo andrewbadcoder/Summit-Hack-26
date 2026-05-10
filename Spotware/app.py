@@ -1,5 +1,7 @@
 import json
 import sys
+import base64
+import datetime
 from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
@@ -31,6 +33,33 @@ if "followup_messages" not in st.session_state:
     st.session_state.followup_messages = []
 if "input_mode" not in st.session_state:
     st.session_state.input_mode = None
+if "show_uploader" not in st.session_state:        # ← ADD THIS LINE
+    st.session_state.show_uploader = False   
+if "device_history" not in st.session_state:
+    st.session_state.device_history = []
+
+# ── File-backed analysis counter ─────────────────────────────────────────────
+_COUNTER_FILE = Path(__file__).resolve().parent / ".analysis_count"
+
+def _get_count() -> int:
+    try:
+        return int(_COUNTER_FILE.read_text().strip())
+    except Exception:
+        return 0
+
+def _increment_count() -> int:
+    c = _get_count() + 1
+    try:
+        _COUNTER_FILE.write_text(str(c))
+    except Exception:
+        pass
+    return c
+
+# ── Demo image ────────────────────────────────────────────────────────────────
+_DEMO = Path(__file__).resolve().parent / "demo.jpg"
+demo_b64 = ""
+if _DEMO.is_file():
+    demo_b64 = base64.b64encode(_DEMO.read_bytes()).decode()
 
 # ── Fonts + Title Styling ────────────────────────────────────────────────────
 st.markdown("""
@@ -252,31 +281,153 @@ st.markdown("""
         padding: 0.5rem 0;
     }
 
-    hr { border-color: rgba(255,255,255,0.07) !important; }
+hr { border-color: rgba(255,255,255,0.07) !important; }
+
+    /* ── Counter badge ── */
+    .sw-counter {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: rgba(88,166,255,0.08);
+        border: 1px solid rgba(88,166,255,0.18);
+        border-radius: 999px; padding: 5px 16px;
+        font-size: 0.78rem; font-weight: 600;
+        color: #58a6ff; letter-spacing: 0.03em;
+        margin-top: 0.9rem;
+    }
+    .sw-counter-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #58a6ff; animation: pulse-blue 2s infinite;
+    }
+    @keyframes pulse-blue {
+        0%,100% { opacity:1; transform:scale(1); }
+        50%      { opacity:0.4; transform:scale(1.4); }
+    }
+
+    /* ── How it works ── */
+    .hiw-row { display: flex; gap: 1.25rem; margin: 0.5rem 0 0.25rem 0; }
+    .hiw-step {
+        flex: 1; background: #0d1117;
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 10px; padding: 1rem 1.1rem; text-align: center;
+    }
+    .hiw-num { font-family:'DM Sans',sans-serif; font-size:1.6rem; font-weight:900; color:#e5533d; line-height:1; margin-bottom:0.4rem; }
+    .hiw-label { font-size:0.78rem; font-weight:600; color:#f0ede6; margin-bottom:0.2rem; }
+    .hiw-desc { font-size:0.72rem; color:#6b7280; }
+
+    /* ── Drag-drop zone ── */
+    .sw-dropzone {
+        border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px;
+        padding: 2.5rem 1.5rem; text-align: center; margin-bottom: 1.25rem;
+        background: rgba(255,255,255,0.02); transition: border-color 0.2s, background 0.2s;
+    }
+    .sw-dropzone:hover, .sw-dropzone.dragover {
+        border-color: #e5533d; background: rgba(229,83,61,0.05);
+    }
+
+    /* ── Confidence bar ── */
+    .conf-bar-wrap {
+        background: rgba(255,255,255,0.06); border-radius: 999px;
+        height: 8px; width: 100%; margin: 6px 0 2px 0; overflow: hidden;
+    }
+    .conf-bar-fill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+    .conf-label {
+        font-size: 0.7rem; color: #6b7280; margin-bottom: 3px;
+        font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+
+    /* ── History thumbnails ── */
+    .hist-item {
+        display: flex; gap: 0.6rem; align-items: center;
+        background: #161b22; border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 10px; padding: 0.55rem 0.75rem; margin-bottom: 0.5rem;
+    }
+    .hist-thumb { width:40px; height:40px; border-radius:6px; object-fit:cover; flex-shrink:0; background:#0d1117; }
+    .hist-info { flex:1; min-width:0; }
+    .hist-device { font-size:0.75rem; font-weight:600; color:#f0ede6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .hist-action { font-size:0.68rem; color:#6b7280; }
+    .hist-ts { font-size:0.62rem; color:#3d5166; }
+
+    /* ── Secondary button ── */
+    [data-testid="stBaseButton-secondary"] {
+        background: rgba(255,255,255,0.04) !important; color: #8b949e !important;
+        border: 1px solid rgba(255,255,255,0.12) !important; border-radius: 999px !important;
+        font-family: 'DM Sans', sans-serif !important; font-size: 0.88rem !important; font-weight: 600 !important;
+    }
+    [data-testid="stBaseButton-secondary"]:hover { background: rgba(255,255,255,0.08) !important; color: #f0ede6 !important; }
+    /* ── File uploader styled as primary button ── */
+    [data-testid="stFileUploadDropzone"] {
+        background: rgba(255,255,255,0.02) !important;
+        border: 2px dashed rgba(255,255,255,0.15) !important;
+        border-radius: 12px !important;
+        padding: 2.5rem 1.5rem !important;
+        text-align: center !important;
+    }
+    [data-testid="stFileUploadDropzone"]:hover {
+        border-color: #e5533d !important;
+        background: rgba(229,83,61,0.05) !important;
+    }
+    [data-testid="stFileUploadDropzone"] button {
+        background: #e5533d !important;
+        color: #fff !important;
+        border: none !important;
+        border-radius: 999px !important;
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        padding: 0.5rem 1.5rem !important;
+        margin-top: 0.75rem !important;
+    }
+    [data-testid="stFileUploadDropzone"] button:hover {
+        background: #cf3f2b !important;
+    }
 </style>
 
 """, unsafe_allow_html=True)
-# ── Sidebar — follow-up history ───────────────────────────────────────────────
-# ── Logo (loaded once, used in sidebar + hero) ────────────────────────────────
-import base64
+# ── Logo + Sidebar ────────────────────────────────────────────────────────────
 _LOGO = Path(__file__).resolve().parent / "logo1.png"
 logo_b64 = ""
-logo_tag = ""
 if _LOGO.is_file():
     logo_b64 = base64.b64encode(_LOGO.read_bytes()).decode()
-    logo_tag = f"<img class='spotware-logo-img' src='data:image/png;base64,{logo_b64}' alt='SpotWare logo'>"
+
 with st.sidebar:
     if logo_b64:
-        st.markdown(
-            f"""<div style='display:flex;justify-content:center;align-items:center;
-                            margin:0 0 0 0;padding:0 0;'>
-                <img src='data:image/png;base64,{logo_b64}' alt='SpotWare'
-                     style='width:100%;max-width:720px;height:auto;object-fit:contain;
-                            display:block;border-radius:12px;background:#0a0f18;'>
+# ✅ No inline style — CSS class now fully controls size and glow
+        st.markdown(        
+            f"""<div class='sw-logo-wrap'>
+                <img src='data:image/png;base64,{logo_b64}' alt='SpotWare'>
             </div>""",
             unsafe_allow_html=True,
         )
-    st.markdown("<div class='sidebar-section-title'>Follow up history</div>", unsafe_allow_html=True)
+
+    # Device history
+    st.markdown("<div class='sidebar-section-title'>🕓 Device History</div>", unsafe_allow_html=True)
+    history = st.session_state.device_history
+    if not history:
+        st.markdown("<div class='sidebar-empty'>No devices analyzed yet.</div>", unsafe_allow_html=True)
+    else:
+        for entry in reversed(history[-5:]):
+            per_h = entry.get("perception", {})
+            dec_h = entry.get("decision", {})
+            img_h = entry.get("image_b64", "")
+            ts_h  = entry.get("timestamp", "")
+            label  = dec_h.get("label", "—") if dec_h else "—"
+            device = f"{per_h.get('manufacturer','?')} {per_h.get('model','?')}"
+            thumb  = (f"<img class='hist-thumb' src='data:image/jpeg;base64,{img_h}'>"
+                      if img_h else "<div class='hist-thumb'></div>")
+            st.markdown(
+                f"""<div class='hist-item'>{thumb}
+                    <div class='hist-info'>
+                        <div class='hist-device'>{device}</div>
+                        <div class='hist-action'>{label}</div>
+                        <div class='hist-ts'>{ts_h}</div>
+                    </div></div>""",
+                unsafe_allow_html=True,
+            )
+        if st.button("🗑️ Clear history", key="clear_hist", use_container_width=True):
+            st.session_state.device_history = []
+            st.rerun()
+
+    # Follow-up chat history
+    st.markdown("<div class='sidebar-section-title'>💬 Follow up history</div>", unsafe_allow_html=True)
     msgs = st.session_state.followup_messages
     if not msgs:
         st.markdown("<div class='sidebar-empty'>No questions asked yet.</div>", unsafe_allow_html=True)
@@ -291,95 +442,131 @@ with st.sidebar:
                 </div>""",
                 unsafe_allow_html=True,
             )
-        if st.button("🗑️ Clear history", use_container_width=True):
+        if st.button("🗑️ Clear chat", key="clear_chat", use_container_width=True):
             st.session_state.followup_messages = []
             st.rerun()
-    if st.session_state.last_perception:
-        per_sb = st.session_state.last_perception
-        dec_sb = st.session_state.last_decision
-        st.markdown("<div class='sidebar-section-title'>📋 Last Result</div>", unsafe_allow_html=True)
-        st.markdown(
-            f"""<div class='chat-history-item'>
-                <div class='role-user'>Device</div>
-                <div class='msg-text'>
-                    {per_sb.get('device_class','—')} · {per_sb.get('manufacturer','—')}<br>
-                    {per_sb.get('model','—')}
-                </div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-        if dec_sb:
-            st.markdown(
-                f"""<div class='chat-history-item'>
-                    <div class='role-assistant'>Action</div>
-                    <div class='msg-text'>{dec_sb.get('label','—')}</div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
 
 # ── Hero (sticky, shrinks on scroll) ─────────────────────────────────────────
 
 
-st.markdown("""
+analysis_count = _get_count()
+st.markdown(f"""
 <div class="spotware-hero">
     <span class="spotware-title">SpotWare</span>
     <p class="spotware-subtitle">Upload or capture a photo of hardware for perception + sustainability lookup.</p>
+    <div style='display:flex;justify-content:center;margin-top:0.9rem;'>
+        <span class='sw-counter'>
+            <span class='sw-counter-dot'></span>
+            {analysis_count:,} device{"s" if analysis_count != 1 else ""} analyzed
+        </span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-
-st.markdown("""
-<div style='display:flex;align-items:center;gap:0.5rem;margin-bottom:1.25rem;'>
-  <span style='font-family:"DM Sans",sans-serif;font-size:0.68rem;font-weight:700;
-               letter-spacing:0.12em;text-transform:uppercase;color:#58a6ff;'>
-    IMAGE SOURCE
-  </span>
+with st.expander("ℹ️  How it works"):
+    st.markdown("""
+<div class='hiw-row'>
+  <div class='hiw-step'>
+    <div class='hiw-num'>1</div>
+    <div class='hiw-label'>Upload</div>
+    <div class='hiw-desc'>Drop or capture a photo of any hardware — laptop, phone, server, PCB, etc.</div>
+  </div>
+  <div class='hiw-step'>
+    <div class='hiw-num'>2</div>
+    <div class='hiw-label'>Analyze</div>
+    <div class='hiw-desc'>Gemini Vision identifies the device class, manufacturer, model, and physical condition.</div>
+  </div>
+  <div class='hiw-step'>
+    <div class='hiw-num'>3</div>
+    <div class='hiw-label'>Act</div>
+    <div class='hiw-desc'>The decision engine recommends the best action: resell, repair, recycle, or dispose.</div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
+# ✅ AFTER — uploader hidden until "Add file" is clicked
 col_up, col_cam = st.columns(2)
 with col_up:
-    if st.button("Upload", key="btn_upload", use_container_width=True, type="primary"):
-        st.session_state.input_mode = "upload"
+    if st.button(
+        "📁  Add file" if not st.session_state.show_uploader else "✕  Cancel",
+        key="btn_add_file",
+        use_container_width=True,
+        type="primary",
+    ):
+        st.session_state.show_uploader = not st.session_state.show_uploader
+        # If hiding, clear any prior upload state
+        if not st.session_state.show_uploader:
+            st.session_state.input_mode = None
         st.rerun()
+
 with col_cam:
-    if st.button("Take a photo", key="btn_camera", use_container_width=True, type="primary"):
-        st.session_state.input_mode = "camera"
+    if st.button("📷  Take a photo", key="btn_camera", use_container_width=True, type="primary"):
+        st.session_state.input_mode = (
+            None if st.session_state.input_mode == "camera" else "camera"
+        )
+        st.session_state.show_uploader = False   # collapse uploader if open
         st.rerun()
 
-st.markdown("<div style='height:0.75rem;'></div>", unsafe_allow_html=True)
-
-# ── File upload or camera — only shown after button click ─────────────────────
+# ✅ Upload: widget, preview, and image_bytes all resolved in the same run
 image_bytes: bytes | None = None
 mime_hint: str | None = None
 source_label = ""
-
-if st.session_state.input_mode is None:
-    pass
-elif st.session_state.input_mode == "upload":
-    uploaded_file = st.file_uploader(
-        "Choose an image...",
+if st.session_state.input_mode == "upload_top":
+    _f = st.session_state.get("top_uploader")
+    if _f is not None:
+        image_bytes  = _f.getvalue()
+        mime_hint    = _f.type or None
+        source_label = _f.name
+if st.session_state.show_uploader:
+    
+    uploaded_file_top = st.file_uploader(
+        "Choose an image…",
         type=["jpg", "jpeg", "png"],
         help="JPG or PNG · max 200 MB",
+        label_visibility="collapsed",
+        key="top_uploader",
     )
-    if uploaded_file is not None:
-        image_bytes = uploaded_file.getvalue()
-        mime_hint = uploaded_file.type or None
-        source_label = uploaded_file.name
+    if uploaded_file_top is not None:
+        # ✅ Read bytes immediately in this same run — no rerun needed
+        image_bytes  = uploaded_file_top.getvalue()
+        mime_hint    = uploaded_file_top.type or None
+        source_label = uploaded_file_top.name
+        st.session_state.input_mode = "upload_top"
         col_img, col_info = st.columns([2, 1])
         with col_img:
-            st.image(uploaded_file, caption="Uploaded image", use_container_width=True)
+            st.image(uploaded_file_top, caption="Uploaded image", use_container_width=True)
         with col_info:
             size_kb = len(image_bytes) / 1024
             st.markdown(
                 f"""<div class='result-card'>
                     <strong>File info</strong><br>
-                    📄 {uploaded_file.name}<br>
+                    📄 {uploaded_file_top.name}<br>
                     📦 {size_kb:.1f} KB<br>
-                    🖼️ {uploaded_file.type or "unknown type"}
+                    🖼️ {uploaded_file_top.type or "unknown type"}
                 </div>""",
                 unsafe_allow_html=True,
             )
+
+if demo_b64:
+    st.markdown("<div style='height:0.4rem;'></div>", unsafe_allow_html=True)
+    if st.button("🧪  Try a demo image", key="btn_demo", use_container_width=True):
+        st.session_state.input_mode = "demo"
+        st.rerun()
+else:
+    st.caption("💡 Add a `demo.jpg` to your app folder to enable the demo image button.")
+
+st.markdown("<div style='height:0.75rem;'></div>", unsafe_allow_html=True)
+
+# ── File upload or camera — only shown after button click ─────────────────────
+
+
+if st.session_state.input_mode == "demo":
+    image_bytes  = base64.b64decode(demo_b64)
+    mime_hint    = "image/jpeg"
+    source_label = "demo.jpg"
+    st.image(image_bytes, caption="Demo image", use_container_width=True)
+    st.caption("This is a bundled demo image. Upload your own hardware photo for a real analysis.")
+
 elif st.session_state.input_mode == "camera":
     picture = st.camera_input("Take a picture", help="Click the shutter button to capture a frame.")
     if picture is not None:
@@ -425,6 +612,8 @@ if image_bytes:
         st.session_state.last_sustainability = None
         st.session_state.last_decision = None
         st.session_state.followup_messages = []
+        st.session_state.input_mode = None        # ← ADD
+        st.session_state.show_uploader = False    # ← ADD
         st.rerun()
 
     if run:
@@ -455,6 +644,15 @@ if image_bytes:
                 st.session_state.last_sustainability = sustainability
                 st.session_state.last_decision = decision
                 progress_placeholder.empty()
+                _increment_count()
+                st.session_state.device_history.append({
+                    "perception": perception,
+                    "decision":   decision,
+                    "image_b64":  base64.b64encode(image_bytes).decode(),
+                    "timestamp":  datetime.datetime.now().strftime("%b %d, %H:%M"),
+                })
+                if len(st.session_state.device_history) > 5:
+                    st.session_state.device_history = st.session_state.device_history[-5:]
             except Exception as e:
                 st.session_state.last_error = str(e)
                 progress_placeholder.empty()
@@ -473,12 +671,18 @@ if image_bytes:
         c2.metric("Manufacturer",  per.get("manufacturer",  "—"))
         c3.metric("Model",         per.get("model",         "—"))
         conf = per.get("confidence", 0)
-        conf_color = "green" if conf >= 0.8 else "orange" if conf >= 0.5 else "red"
-        st.caption(
-            f"Condition: **{per.get('condition', '—')}** · "
-            f"Completeness: **{per.get('completeness', '—')}** · "
-            f"Confidence: :{conf_color}[**{conf:.0%}**]"
+        bar_color  = "#4db85c" if conf >= 0.8 else "#c98d2a" if conf >= 0.5 else "#e5533d"
+        conf_label = "High confidence" if conf >= 0.8 else "Medium confidence" if conf >= 0.5 else "Low confidence"
+        st.markdown(
+            f"""<div style='margin-top:0.75rem;'>
+                <div class='conf-label'>Confidence — {conf:.0%} · {conf_label}</div>
+                <div class='conf-bar-wrap'>
+                    <div class='conf-bar-fill' style='width:{conf*100:.1f}%;background:{bar_color};'></div>
+                </div>
+            </div>""",
+            unsafe_allow_html=True,
         )
+        st.caption(f"Condition: **{per.get('condition','—')}** · Completeness: **{per.get('completeness','—')}**")
         if per.get("notes"):
             st.info(per["notes"])
         st.markdown("</div>", unsafe_allow_html=True)
@@ -519,9 +723,12 @@ if image_bytes:
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
         st.markdown("<div class='panel-title'>♻️ Sustainability impact</div>", unsafe_allow_html=True)
         m1, m2, m3 = st.columns(3)
-        m1.metric("CO₂ avoided",       f"{dec.get('co2_avoided_kg', 0)} kg")
-        m2.metric("Recovery value",     f"${dec.get('value_usd', 0)}")
-        m3.metric("Recoverable metals", f"{dec.get('metals_total_g', 0):.0f} g")
+        m1.metric("CO₂ avoided",       f"{dec.get('co2_avoided_kg', 0)} kg",
+                  help="Estimated kg of CO₂ avoided vs landfill disposal.")
+        m2.metric("Recovery value",     f"${dec.get('value_usd', 0)}",
+                  help="Estimated USD market or material recovery value.")
+        m3.metric("Recoverable metals", f"{dec.get('metals_total_g', 0):.0f} g",
+                  help="Total grams of recoverable metals (gold, copper, aluminium, etc.).")
         if dec.get("source"):
             st.caption(f"📚 Source: {dec['source']}")
         metals = dec.get("metals_breakdown_g") or sus.get("recoverable_metals_g")
@@ -557,6 +764,31 @@ if image_bytes:
         with col_c:
             with st.expander("Raw decision output"):
                 st.code(json.dumps(dec, indent=2), language="json")
+        report_lines = [
+            "SpotWare Analysis Report", "=" * 40,
+            f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}", "",
+            "DEVICE IDENTIFICATION",
+            f"  Class:        {per.get('device_class','—')}",
+            f"  Manufacturer: {per.get('manufacturer','—')}",
+            f"  Model:        {per.get('model','—')}",
+            f"  Condition:    {per.get('condition','—')}",
+            f"  Confidence:   {per.get('confidence',0):.0%}", "",
+            "RECOMMENDED ACTION",
+            f"  {dec.get('label','—')}",
+            f"  {dec.get('reason','')}", "",
+            "SUSTAINABILITY IMPACT",
+            f"  CO2 avoided:        {dec.get('co2_avoided_kg',0)} kg",
+            f"  Recovery value:     ${dec.get('value_usd',0)}",
+            f"  Recoverable metals: {dec.get('metals_total_g',0):.0f} g", "",
+            "DECISION TRACE",
+        ] + [f"  - {s}" for s in dec.get("rule_trace", [])]
+        st.download_button(
+            label="⬇️  Export report (.txt)",
+            data="\n".join(report_lines),
+            file_name=f"spotware_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
@@ -597,4 +829,4 @@ if image_bytes:
                     {"role": "assistant", "content": reply}
                 )
                 st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
