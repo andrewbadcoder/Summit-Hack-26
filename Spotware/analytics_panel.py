@@ -75,8 +75,7 @@ def render_analytics_panel():
     Drop this call into app.py wherever you want the analytics section.
     Renders completely standalone — no external state needed.
     """
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    st.markdown("<div class='panel-title'>📊 Analytics — Submission History</div>", unsafe_allow_html=True)
+    st.markdown("<div class='panel-title' style='font-size:2rem;'>📊 Sustainability Impact Summary</div>", unsafe_allow_html=True)
 
     total = submission_count()
     if total == 0:

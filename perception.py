@@ -5,6 +5,7 @@ Hardware image perception via Gemini VLM: one image in, structured JSON out.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import re
@@ -15,6 +16,7 @@ from typing import Any, Union
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from PIL import Image
 
 ImageInput = Union[str, Path, bytes]
 
@@ -174,6 +176,62 @@ def _validate_and_coerce(raw: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Image preprocessing — quality-preserving downsize for faster Gemini calls.
+# ---------------------------------------------------------------------------
+
+# Cap on the longest image dimension (pixels) before sending to Gemini.
+# 1600 px keeps labels (model numbers, FCC IDs, serial stickers) clearly
+# readable while cutting upload size and Gemini tile count significantly.
+# Gemini processes images in 768 px tiles, so beyond ~1500 px on the long
+# side you mostly pay for more tiles without accuracy gain.
+_MAX_DIMENSION_PX = 1600
+
+# JPEG quality for the recompressed output. 92 is visually indistinguishable
+# from the original on hardware photos and well above the threshold where
+# VLM accuracy degrades.
+_JPEG_QUALITY = 92
+
+
+def _maybe_downsize_image(image_bytes: bytes, mime_type: str) -> tuple[bytes, str]:
+    """
+    Downsize the image only if its longest side exceeds _MAX_DIMENSION_PX.
+
+    Preserves quality where possible:
+      - Returns the original bytes untouched if the image is already small.
+      - Uses Lanczos resampling (best for downscaling photos).
+      - JPEG re-encoded at quality 92 (visually lossless for our purposes).
+      - PNG stays PNG to preserve any alpha / lossless detail.
+      - Other formats fall back to JPEG to keep payloads small.
+
+    Returns (possibly_resized_bytes, mime_type_to_use).
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+    except Exception:
+        # If Pillow can't open it, hand back the original bytes unchanged
+        # rather than failing the whole perception call.
+        return image_bytes, mime_type
+
+    longest = max(img.size)
+    if longest <= _MAX_DIMENSION_PX:
+        return image_bytes, mime_type
+
+    img.thumbnail((_MAX_DIMENSION_PX, _MAX_DIMENSION_PX), Image.LANCZOS)
+
+    out = io.BytesIO()
+    if "png" in mime_type.lower():
+        # Keep PNG to preserve transparency and avoid re-compression artifacts.
+        img.save(out, format="PNG", optimize=True)
+        return out.getvalue(), "image/png"
+
+    # Default path: JPEG with high quality. Ensures RGB (JPEG can't do RGBA).
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    img.save(out, format="JPEG", quality=_JPEG_QUALITY, optimize=True, progressive=True)
+    return out.getvalue(), "image/jpeg"
+
+
 def _call_gemini_vision(
     image_bytes: bytes,
     mime_type: str,
@@ -204,6 +262,7 @@ def perceive(image: ImageInput, *, model: str | None = None) -> dict[str, Any]:
     api_key = load_gemini_api_key()
     resolved_model = (model or os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL).strip()
     image_bytes, mime_type = _load_image_bytes_and_mime(image)
+    image_bytes, mime_type = _maybe_downsize_image(image_bytes, mime_type)
     raw_text = _call_gemini_vision(
         image_bytes,
         mime_type,
